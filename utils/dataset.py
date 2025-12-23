@@ -31,7 +31,20 @@ class MMFFDataset(Dataset):
         self.skeleton_data = np.load(skeleton_data_path, mmap_mode='r')
         
         with open(label_path, 'rb') as f:
-            self.sample_names, self.labels = pickle.load(f)
+            self.sample_names, labels = pickle.load(f)
+        
+        # IMPORTANT: Normalize labels to start from 0
+        labels = np.array(labels)
+        unique_labels = np.unique(labels)
+        print(f"Original labels range: {labels.min()} to {labels.max()}")
+        print(f"Unique labels: {sorted(unique_labels)}")
+        
+        # Map labels to [0, num_classes-1]
+        self.label_map = {old_label: new_label for new_label, old_label in enumerate(sorted(unique_labels))}
+        self.labels = [self.label_map[label] for label in labels]
+        
+        print(f"Mapped labels range: {min(self.labels)} to {max(self.labels)}")
+        print(f"Number of classes: {len(unique_labels)}")
         
         self.image_dir = image_dir
         self.num_frames = num_frames
@@ -76,7 +89,13 @@ class MMFFDataset(Dataset):
             # Fallback to .png if .jpg not found
             image_path = os.path.join(self.image_dir, f"{sample_name}.png")
         
-        image = Image.open(image_path).convert('RGB')
+        if not os.path.exists(image_path):
+            # If image not found, create a black image as placeholder
+            print(f"Warning: Image not found: {image_path}")
+            image = Image.new('RGB', (299, 299), color='black')
+        else:
+            image = Image.open(image_path).convert('RGB')
+        
         image = self.transform(image)
         
         # Convert to tensors
