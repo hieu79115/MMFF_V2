@@ -104,8 +104,12 @@ def main():
     
     # Load checkpoint
     print(f'Loading checkpoint: {args.checkpoint}')
-    checkpoint = torch.load(args.checkpoint, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    if 'model_state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['model_state_dict'])
+    else:
+        model.load_state_dict(checkpoint)
+  
     
     # Test
     print('Testing...')
