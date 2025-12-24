@@ -198,16 +198,14 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
         skeleton_optimizer,
         mode='max',
         factor=0.5,
-        patience=5,
-        verbose=True
+        patience=5
     )
 
     rgb_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         rgb_optimizer,
         mode='max',
         factor=0.5,
-        patience=5,
-        verbose=True
+        patience=5
     )
     
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
