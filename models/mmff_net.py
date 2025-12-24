@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from models.skeleton import SkeletonStream_STGCN
-from models.rgb import RGBStream_Xception
+# from models.rgb import RGBStream_Xception
+from models.rgb_simple import RGBStream_ResNet18
 from models.attention import EarlyFusionModule
 from models.fusion import CrossAttentionFusion
 
@@ -21,18 +22,21 @@ class MMFF_Net(nn.Module):
         )
         
         # RGB Stream
-        self.rgb_stream = RGBStream_Xception()
+        # self.rgb_stream = RGBStream_Xception()
+         self.rgb_stream = RGBStream_ResNet18(pretrained=True)
         
         # Early Fusion (Attention)
         self.early_fusion = EarlyFusionModule(
-            in_channels=2048,
+            # in_channels=2048,
+            in_channels=512,  # Changed from 2048 to 512
             num_joints=num_joints
         )
         
         # Late Fusion
         self.late_fusion = CrossAttentionFusion(
             skeleton_dim=256,
-            rgb_dim=2048,
+            # rgb_dim=2048,
+            rgb_dim=512,  # Changed from 2048 to 512
             fusion_dim=512
         )
         
@@ -52,11 +56,11 @@ class MMFF_Net(nn.Module):
         Returns:
             logits: (N, num_classes)
         """
-        # Extract RGB features
-        rgb_feat = self.rgb_stream(rgb_image)  # (N, 2048, H/32, W/32)
+       # Extract RGB features
+        rgb_feat = self.rgb_stream(rgb_image)  # (N, 512, H/32, W/32)
         
         # Early Fusion: Apply attention on RGB features
-        rgb_feat = self.early_fusion(rgb_feat, skeleton)  # (N, 2048, H/32, W/32)
+        rgb_feat = self.early_fusion(rgb_feat, skeleton)  # (N, 512, H/32, W/32)
         
         # Extract skeleton features
         skeleton_feat = self.skeleton_stream(skeleton)  # (N, 256)

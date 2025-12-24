@@ -10,7 +10,8 @@ import numpy as np
 
 from models.mmff_net import MMFF_Net
 from models.skeleton import SkeletonStream_STGCN
-from models.rgb import RGBStream_Xception
+# from models.rgb import RGBStream_Xception
+from models.rgb_simple import RGBStream_ResNet18
 from utils.dataset import get_dataloaders
 
 def parse_args():
@@ -123,7 +124,8 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
         graph_args=graph_args
     ).to(device)
     
-    rgb_stream = RGBStream_Xception().to(device)
+    # rgb_stream = RGBStream_Xception().to(device)
+    rgb_stream = RGBStream_ResNet18(pretrained=True).to(device)
     
     # Simpler classifiers with BatchNorm
     skeleton_classifier = nn.Sequential(
@@ -132,16 +134,28 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
         nn.Linear(256, args.num_classes)
     ).to(device)
     
+    # rgb_classifier = nn.Sequential(
+    #     nn.AdaptiveAvgPool2d(1),
+    #     nn.Flatten(),
+    #     nn.BatchNorm1d(2048),
+    #     nn.Dropout(0.5),
+    #     nn.Linear(2048, 512),
+    #     nn.BatchNorm1d(512),
+    #     nn.ReLU(inplace=True),
+    #     nn.Dropout(0.5),
+    #     nn.Linear(512, args.num_classes)
+    # ).to(device)
+    
     rgb_classifier = nn.Sequential(
         nn.AdaptiveAvgPool2d(1),
         nn.Flatten(),
-        nn.BatchNorm1d(2048),
+        nn.BatchNorm1d(512),  # ResNet18 output = 512, not 2048
         nn.Dropout(0.5),
-        nn.Linear(2048, 512),
-        nn.BatchNorm1d(512),
+        nn.Linear(512, 256),
+        nn.BatchNorm1d(256),
         nn.ReLU(inplace=True),
-        nn.Dropout(0.5),
-        nn.Linear(512, args.num_classes)
+        nn.Dropout(0.3),
+        nn.Linear(256, args.num_classes)
     ).to(device)
     
     # FIXED: Higher learning rates with SGD
