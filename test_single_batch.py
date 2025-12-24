@@ -72,7 +72,7 @@ def test_single_batch(data_dir):
     print(f"\nFinal RGB Accuracy: {acc:.2f}%")
     
     if acc < 80:
-        print("⚠️  WARNING: RGB cannot overfit single batch!")
+        print("WARNING: RGB cannot overfit single batch!")
         print("   Possible issues:")
         print("   - Images are corrupted/blank")
         print("   - Transform is wrong")

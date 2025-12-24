@@ -23,7 +23,7 @@ class MMFF_Net(nn.Module):
         
         # RGB Stream
         # self.rgb_stream = RGBStream_Xception()
-         self.rgb_stream = RGBStream_ResNet18(pretrained=True)
+        self.rgb_stream = RGBStream_ResNet18(pretrained=True)
         
         # Early Fusion (Attention)
         self.early_fusion = EarlyFusionModule(

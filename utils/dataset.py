@@ -122,7 +122,8 @@ class MMFFDataset(Dataset):
             indices = np.linspace(0, T - 1, self.num_frames, dtype=int)
             skeleton = skeleton[:, indices, :, :]
         
-        return skeleton
+        # FIX: Copy to make writable
+        return skeleton.copy()  # Add .copy() here
 
 
 def get_dataloaders(data_dir, 
