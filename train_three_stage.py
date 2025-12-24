@@ -128,9 +128,15 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
     rgb_stream = RGBStream_ResNet18(pretrained=True).to(device)
     
     # Simpler classifiers with BatchNorm
+    # skeleton_classifier = nn.Sequential(
+    #     nn.BatchNorm1d(256),
+    #     nn.Dropout(0.3),
+    #     nn.Linear(256, args.num_classes)
+    # ).to(device)
+
     skeleton_classifier = nn.Sequential(
         nn.BatchNorm1d(256),
-        nn.Dropout(0.3),
+        nn.Dropout(0.5),  # Tăng từ 0.3 lên 0.5
         nn.Linear(256, args.num_classes)
     ).to(device)
     
@@ -149,12 +155,12 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
     rgb_classifier = nn.Sequential(
         nn.AdaptiveAvgPool2d(1),
         nn.Flatten(),
-        nn.BatchNorm1d(512),  # ResNet18 output = 512, not 2048
-        nn.Dropout(0.5),
+        nn.BatchNorm1d(512),
+        nn.Dropout(0.6),  # Tăng từ 0.5 lên 0.6
         nn.Linear(512, 256),
         nn.BatchNorm1d(256),
         nn.ReLU(inplace=True),
-        nn.Dropout(0.3),
+        nn.Dropout(0.5),  # Tăng từ 0.3 lên 0.5
         nn.Linear(256, args.num_classes)
     ).to(device)
     
@@ -163,35 +169,54 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
         list(skeleton_stream.parameters()) + list(skeleton_classifier.parameters()),
         lr=args.lr_stage1_skeleton,
         momentum=0.9,
-        weight_decay=args.weight_decay,
+        weight_decay=0.001,  # Tăng từ 0.0004 lên 0.001
         nesterov=True
     )
-    
+
     rgb_optimizer = optim.SGD(
         list(rgb_stream.parameters()) + list(rgb_classifier.parameters()),
         lr=args.lr_stage1_rgb,
         momentum=0.9,
-        weight_decay=args.weight_decay,
+        weight_decay=0.001,  # Tăng từ 0.0004 lên 0.001
         nesterov=True
     )
     
     # Learning rate schedulers
-    skeleton_scheduler = optim.lr_scheduler.MultiStepLR(
-        skeleton_optimizer, 
-        milestones=[30, 45], 
-        gamma=0.1
-    )
+    # skeleton_scheduler = optim.lr_scheduler.MultiStepLR(
+    #     skeleton_optimizer, 
+    #     milestones=[30, 45], 
+    #     gamma=0.1
+    # )
     
-    rgb_scheduler = optim.lr_scheduler.MultiStepLR(
+    # rgb_scheduler = optim.lr_scheduler.MultiStepLR(
+    #     rgb_optimizer,
+    #     milestones=[30, 45],
+    #     gamma=0.1
+    # )
+
+    skeleton_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        skeleton_optimizer,
+        mode='max',
+        factor=0.5,
+        patience=5,
+        verbose=True
+    )
+
+    rgb_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         rgb_optimizer,
-        milestones=[30, 45],
-        gamma=0.1
+        mode='max',
+        factor=0.5,
+        patience=5,
+        verbose=True
     )
     
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     
     best_skeleton_acc = 0
     best_rgb_acc = 0
+    patience = 10
+    skeleton_no_improve = 0
+    rgb_no_improve = 0
     
     for epoch in range(args.epochs_stage1):
         print(f'\n[Stage 1] Epoch {epoch+1}/{args.epochs_stage1}')
@@ -238,8 +263,10 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
         print(f'RGB      - Train: {rgb_train_acc:.2f}%, Val: {rgb_val_acc:.2f}%')
         
         # Step schedulers
-        skeleton_scheduler.step()
-        rgb_scheduler.step()
+        # skeleton_scheduler.step()
+        # rgb_scheduler.step()
+        skeleton_scheduler.step(skel_val_acc)
+        rgb_scheduler.step(rgb_val_acc)
         
         # Log
         writer.add_scalar('Stage1/skeleton_train_acc', skel_train_acc, epoch)
@@ -259,6 +286,31 @@ def stage1_train_separate_streams(args, device, train_loader, val_loader, writer
             torch.save(rgb_stream.state_dict(),
                       os.path.join(args.save_dir, 'rgb_stream_best.pth'))
             print(f'  → Best RGB model saved: {best_rgb_acc:.2f}%')
+
+        # Early stopping for skeleton
+        if skel_val_acc > best_skeleton_acc:
+            best_skeleton_acc = skel_val_acc
+            skeleton_no_improve = 0
+            torch.save(skeleton_stream.state_dict(), 
+                    os.path.join(args.save_dir, 'skeleton_stream_best.pth'))
+            print(f'  → Best skeleton model saved: {best_skeleton_acc:.2f}%')
+        else:
+            skeleton_no_improve += 1
+        
+        # Early stopping for RGB
+        if rgb_val_acc > best_rgb_acc:
+            best_rgb_acc = rgb_val_acc
+            rgb_no_improve = 0
+            torch.save(rgb_stream.state_dict(),
+                    os.path.join(args.save_dir, 'rgb_stream_best.pth'))
+            print(f'  → Best RGB model saved: {best_rgb_acc:.2f}%')
+        else:
+            rgb_no_improve += 1
+        
+        # Stop if both haven't improved
+        if skeleton_no_improve >= patience and rgb_no_improve >= patience:
+            print(f'\nEarly stopping at epoch {epoch+1}')
+            break
     
     print(f'\nStage 1 Complete!')
     print(f'Best Skeleton Acc: {best_skeleton_acc:.2f}%')
